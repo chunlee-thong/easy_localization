@@ -207,7 +207,7 @@ class Localization {
     return resource;
   }
 
-  bool exists(String key){
+  bool exists(String key) {
     return _translations?.get(key) != null;
   }
 }

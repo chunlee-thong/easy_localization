@@ -15,7 +15,7 @@ class EasyLocalizationController extends ChangeNotifier {
 
   final Function(FlutterError e) onLoadError;
   // ignore: prefer_typing_uninitialized_variables
-  final assetLoader;
+  AssetLoader assetLoader;
   final String path;
   final bool useFallbackTranslations;
   final bool saveLocale;
@@ -106,10 +106,8 @@ class EasyLocalizationController extends ChangeNotifier {
         }
         _fallbackTranslations = Translations(data);
       }
-    } on FlutterError catch (e) {
-      onLoadError(e);
     } catch (e) {
-      onLoadError(FlutterError(e.toString()));
+      rethrow;
     }
   }
 
@@ -139,6 +137,15 @@ class EasyLocalizationController extends ChangeNotifier {
   }
 
   Locale get locale => _locale;
+
+  Future<void> updateAssetLoader(
+      BuildContext context, AssetLoader assetLoader) async {
+    this.assetLoader = assetLoader;
+    await loadTranslations();
+    // ignore: use_build_context_synchronously
+    EasyLocalization.of(context)!.delegate.load(locale);
+    notifyListeners();
+  }
 
   Future<void> setLocale(Locale l) async {
     _locale = l;

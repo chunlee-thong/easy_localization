@@ -1,12 +1,10 @@
 import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
-import 'package:easy_localization/src/easy_localization_controller.dart';
 import 'package:easy_logger/easy_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'asset_loader.dart';
 import 'localization.dart';
 
 part 'utils.dart';
@@ -66,7 +64,7 @@ class EasyLocalization extends StatefulWidget {
   /// You can use custom loaders from [Easy Localization Loader](https://github.com/aissat/easy_localization_loader) or create your own class.
   /// @Default value `const RootBundleAssetLoader()`
   // ignore: prefer_typing_uninitialized_variables
-  final assetLoader;
+  final AssetLoader assetLoader;
 
   /// Save locale in device storage.
   /// @Default value true
@@ -130,9 +128,9 @@ class _EasyLocalizationState extends State<EasyLocalization> {
       useFallbackTranslations: widget.useFallbackTranslations,
       path: widget.path,
       onLoadError: (FlutterError e) {
-        setState(() {
-          translationsLoadError = e;
-        });
+        // setState(() {
+        //   translationsLoadError = e;
+        // });
       },
     );
     // causes localization to rebuild with new language
@@ -151,11 +149,11 @@ class _EasyLocalizationState extends State<EasyLocalization> {
   @override
   Widget build(BuildContext context) {
     EasyLocalization.logger.debug('Build');
-    if (translationsLoadError != null) {
-      return widget.errorWidget != null
-          ? widget.errorWidget!(translationsLoadError)
-          : ErrorWidget(translationsLoadError!);
-    }
+    // if (translationsLoadError != null) {
+    //   return widget.errorWidget != null
+    //       ? widget.errorWidget!(translationsLoadError)
+    //       : ErrorWidget(translationsLoadError!);
+    // }
     return _EasyLocalizationProvider(
       widget,
       localizationController!,
