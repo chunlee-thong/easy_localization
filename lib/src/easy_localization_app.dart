@@ -52,6 +52,35 @@ class EasyLocalization extends StatefulWidget {
   /// ```
   final bool useFallbackTranslations;
 
+  /// If a localization key is empty in the locale file, try to use the fallbackLocale file.
+  /// Does not take effect if [useFallbackTranslations] is false.
+  /// @Default value false
+  /// Example:
+  /// ```
+  /// useFallbackTranslationsForEmptyResources: true
+  /// ```
+  final bool useFallbackTranslationsForEmptyResources;
+
+  /// Ignore usage of plural strings for languages that do not use plural rules.
+  /// @Default value false
+  /// Example:
+  /// ```
+  /// // Default behavior, use "zero" rule for 0 even if the language doesn't
+  /// // use it by default (e.g. "en"). If "zero" localization for that string
+  /// // doesn't exist, "other" is still used as fallback.
+  /// // "nTimes": "{count, plural, =0{never} =1{once} other{{count} times}}"
+  /// // Text(AppLocalizations.of(context)!.nTimes(_counter)),
+  /// // will print "never, once, 2 times" for ALL languages.
+  /// ignorePluralRules: true
+  /// // Use "zero" rule for 0 only if the language is set to do so (e.g. for
+  /// "lt" but not for "en").
+  /// // "nTimes": "{count, plural, =0{never} =1{once} other{{count} times}}"
+  /// // Text(AppLocalizations.of(context)!.nTimes(_counter)),
+  /// // will print "never, once, 2 times" ONLY for languages with plural rules.
+  /// ignorePluralRules: false
+  /// ```
+  final bool ignorePluralRules;
+
   /// Path to your folder with localization files.
   /// Example:
   /// ```dart
@@ -65,6 +94,28 @@ class EasyLocalization extends StatefulWidget {
   /// @Default value `const RootBundleAssetLoader()`
   // ignore: prefer_typing_uninitialized_variables
   final AssetLoader assetLoader;
+
+  /// Class loader for localization files that belong to other packages.
+  /// You can use custom loaders from [Easy Localization Loader](https://github.com/aissat/easy_localization_loader) or create your own class.
+  /// Example:
+  /// ```dart
+  //   runApp(
+  //   EasyLocalization(
+  //     supportedLocales: const <Locale>[
+  //       Locale('en'),
+  //     ],
+  //     fallbackLocale: const Locale('en'),
+  //     assetLoader: const RootBundleAssetLoader(),
+  //     extraAssetLoaders: [
+  //         TranslationsLoader(packageName: 'package_example_1'),
+  //         TranslationsLoader(packageName: 'package_example_2'),
+  //     ],
+  //     path: 'lib/l10n/translations',
+  //     child: const MainApp(),
+  //   ),
+  // );
+  /// @Default value `null`
+  final List<AssetLoader>? extraAssetLoaders;
 
   /// Save locale in device storage.
   /// @Default value true
@@ -83,7 +134,10 @@ class EasyLocalization extends StatefulWidget {
     this.startLocale,
     this.useOnlyLangCode = false,
     this.useFallbackTranslations = false,
+    this.useFallbackTranslationsForEmptyResources = false,
+    this.ignorePluralRules = true,
     this.assetLoader = const RootBundleAssetLoader(),
+    this.extraAssetLoaders,
     this.saveLocale = true,
     this.errorWidget,
   })  : assert(supportedLocales.isNotEmpty),
@@ -97,14 +151,12 @@ class EasyLocalization extends StatefulWidget {
   _EasyLocalizationState createState() => _EasyLocalizationState();
 
   // ignore: library_private_types_in_public_api
-  static _EasyLocalizationProvider? of(BuildContext context) =>
-      _EasyLocalizationProvider.of(context);
+  static _EasyLocalizationProvider? of(BuildContext context) => _EasyLocalizationProvider.of(context);
 
   /// ensureInitialized needs to be called in main
   /// so that savedLocale is loaded and used from the
   /// start.
-  static Future<void> ensureInitialized() async =>
-      await EasyLocalizationController.initEasyLocation();
+  static Future<void> ensureInitialized() async => await EasyLocalizationController.initEasyLocation();
 
   /// Customizable logger
   static EasyLogger logger = EasyLogger(name: '🌎 Easy Localization');
@@ -124,6 +176,7 @@ class _EasyLocalizationState extends State<EasyLocalization> {
       supportedLocales: widget.supportedLocales,
       startLocale: widget.startLocale,
       assetLoader: widget.assetLoader,
+      extraAssetLoaders: widget.extraAssetLoaders,
       useOnlyLangCode: widget.useOnlyLangCode,
       useFallbackTranslations: widget.useFallbackTranslations,
       path: widget.path,
@@ -160,6 +213,8 @@ class _EasyLocalizationState extends State<EasyLocalization> {
       delegate: _EasyLocalizationDelegate(
         localizationController: localizationController,
         supportedLocales: widget.supportedLocales,
+        useFallbackTranslationsForEmptyResources: widget.useFallbackTranslationsForEmptyResources,
+        ignorePluralRules: widget.ignorePluralRules,
       ),
     );
   }
@@ -193,8 +248,7 @@ class _EasyLocalizationProvider extends InheritedWidget {
 
   // _EasyLocalizationDelegate get delegate => parent.delegate;
 
-  _EasyLocalizationProvider(this.parent, this._localeState,
-      {Key? key, required this.delegate})
+  _EasyLocalizationProvider(this.parent, this._localeState, {Key? key, required this.delegate})
       : currentLocale = _localeState.locale,
         super(key: key, child: parent.child) {
     EasyLocalization.logger.debug('Init provider');
@@ -205,6 +259,7 @@ class _EasyLocalizationProvider extends InheritedWidget {
 
   /// Get fallback locale
   Locale? get fallbackLocale => parent.fallbackLocale;
+
   // Locale get startLocale => parent.startLocale;
 
   /// Change app locale
@@ -223,6 +278,7 @@ class _EasyLocalizationProvider extends InheritedWidget {
 
   /// Getting device locale from platform
   Locale get deviceLocale => _localeState.deviceLocale;
+  Locale? get savedLocale => _localeState.savedLocale;
 
   /// Reset locale to platform locale
   Future<void> resetLocale() => _localeState.resetLocale();
@@ -239,12 +295,18 @@ class _EasyLocalizationProvider extends InheritedWidget {
 class _EasyLocalizationDelegate extends LocalizationsDelegate<Localization> {
   final List<Locale>? supportedLocales;
   final EasyLocalizationController? localizationController;
+  final bool useFallbackTranslationsForEmptyResources;
+  final bool ignorePluralRules;
 
   ///  * use only the lang code to generate i18n file path like en.json or ar.json
   // final bool useOnlyLangCode;
 
-  _EasyLocalizationDelegate(
-      {this.localizationController, this.supportedLocales}) {
+  _EasyLocalizationDelegate({
+    required this.useFallbackTranslationsForEmptyResources,
+    this.ignorePluralRules = true,
+    this.localizationController,
+    this.supportedLocales,
+  }) {
     EasyLocalization.logger.debug('Init Localization Delegate');
   }
 
@@ -258,9 +320,13 @@ class _EasyLocalizationDelegate extends LocalizationsDelegate<Localization> {
       await localizationController!.loadTranslations();
     }
 
-    Localization.load(value,
-        translations: localizationController!.translations,
-        fallbackTranslations: localizationController!.fallbackTranslations);
+    Localization.load(
+      value,
+      translations: localizationController!.translations,
+      fallbackTranslations: localizationController!.fallbackTranslations,
+      useFallbackTranslationsForEmptyResources: useFallbackTranslationsForEmptyResources,
+      ignorePluralRules: ignorePluralRules,
+    );
     return Future.value(Localization.instance);
   }
 
